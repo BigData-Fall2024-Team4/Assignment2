@@ -1,0 +1,4 @@
+.env
+GAIA/
+__pycache__/
+*.pyc
