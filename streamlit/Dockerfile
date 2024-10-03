@@ -13,10 +13,10 @@ RUN pip install poetry \
     && poetry install --no-dev
 
 # Copy the application code
-COPY  . /app
+COPY . /app
 
 # Expose the default Streamlit port
 EXPOSE 8501
 
-# Run the Streamlit app using Poetry
-CMD ["poetry", "run","python", "main.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Run the Streamlit app
+CMD ["streamlit", "run", "index.py", "--server.port=8501", "--server.address=0.0.0.0"]
