@@ -16,7 +16,7 @@ RUN pip install poetry \
 COPY  . /app
 
 # Expose the default Streamlit port
-EXPOSE 8501
+EXPOSE 8000
 
 # Run the Streamlit app using Poetry
 CMD ["uvicorn", "main_fastapi:app", "--host", "0.0.0.0", "--port", "8000"]
