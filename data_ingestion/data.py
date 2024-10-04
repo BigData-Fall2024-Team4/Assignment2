@@ -52,10 +52,10 @@ def setup_gcp_clients():
 
     return bucket, connection, cursor
 
-def create_table(cursor, connection):
-    """Creates the table for validation cases if it doesn't exist."""
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS validation_cases (
+def create_table(cursor, connection, table_name):
+    """Creates the table for cases if it doesn't exist."""
+    cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
             id INT AUTO_INCREMENT PRIMARY KEY,
             task_id VARCHAR(255),
             question TEXT,
@@ -80,11 +80,13 @@ def upload_to_gcs(bucket, local_file_path, file_name):
     except Exception as e:
         print(f"Error uploading {local_file_path} to GCS: {e}")
 
-def process_metadata(file_path, cursor, connection, bucket, local_clone_dir):
+def process_metadata(file_path, cursor, connection, bucket, local_clone_dir, dataset_type):
     """Processes each line in the metadata file, uploads to GCS, and inserts into Cloud SQL."""
     if not os.path.exists(file_path):
         print(f"File {file_path} does not exist.")
         return
+    
+    table_name = f"{dataset_type}_cases"
     
     with open(file_path, 'r') as file:
         for line in file:
@@ -102,30 +104,34 @@ def process_metadata(file_path, cursor, connection, bucket, local_clone_dir):
 
             # Upload to GCS if file_name is present
             if file_name and file_name != 'NULL':
-                local_file_path = os.path.join(local_clone_dir, '2023', 'validation', file_name)
+                local_file_path = os.path.join(local_clone_dir, '2023', dataset_type, file_name)
                 if os.path.exists(local_file_path):
-                    upload_to_gcs(bucket, local_file_path, file_name)
+                    upload_to_gcs(bucket, local_file_path, f"{dataset_type}/{file_name}")
                 else:
                     print(f"File {local_file_path} not found in the GAIA dataset.")
             
             # Insert data into Cloud SQL
-            sql = """
-            INSERT INTO validation_cases (task_id, question, level, final_answer, file_name, steps, time_taken, tools, file_path, annotator_metadata)
+            sql = f"""
+            INSERT INTO {table_name} (task_id, question, level, final_answer, file_name, steps, time_taken, tools, file_path, annotator_metadata)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             values = (task_id, question, level, final_answer, file_name, steps, time_taken, tools, local_file_path if file_name else 'NULL', json.dumps(annotator_metadata))
             cursor.execute(sql, values)
             connection.commit()
 
-    print("Data inserted and files uploaded successfully.")
+    print(f"Data inserted and files uploaded successfully for {dataset_type} dataset.")
 
 def main():
     local_clone_dir = clone_repository()
-    file_path = os.path.join(local_clone_dir, '2023', 'validation', 'metadata.jsonl')
     bucket, connection, cursor = setup_gcp_clients()
-    create_table(cursor, connection)
 
-    process_metadata(file_path, cursor, connection, bucket, local_clone_dir)
+    datasets = ['validation', 'test']
+
+    for dataset in datasets:
+        file_path = os.path.join(local_clone_dir, '2023', dataset, 'metadata.jsonl')
+        table_name = f"{dataset}_cases"
+        create_table(cursor, connection, table_name)
+        process_metadata(file_path, cursor, connection, bucket, local_clone_dir, dataset)
 
 if __name__ == "__main__":
     main()
