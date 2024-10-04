@@ -21,16 +21,29 @@ def get_gcp_connection():
         print(f"Error connecting to Cloud SQL: {e}")
         return None
 
-def get_data_from_gcp():
+def get_data_from_gcp(file_type='all', dataset='both'):
     """Retrieves question data from the GCP Cloud SQL database."""
     connection = get_gcp_connection()
     if connection:
         try:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT task_id, question FROM validation_cases")
-                data = cursor.fetchall()
+                tables = []
+                if dataset == 'validation' or dataset == 'both':
+                    tables.append('validation_cases')
+                if dataset == 'test' or dataset == 'both':
+                    tables.append('test_cases')
+                
+                all_data = []
+                for table in tables:
+                    if file_type == 'pdf':
+                        cursor.execute(f"SELECT task_id, question, file_name FROM {table} WHERE file_name LIKE '%.pdf'")
+                    elif file_type == 'other':
+                        cursor.execute(f"SELECT task_id, question, file_name FROM {table} WHERE file_name NOT LIKE '%.pdf'")
+                    else:
+                        cursor.execute(f"SELECT task_id, question, file_name FROM {table}")
+                    all_data.extend(cursor.fetchall())
             connection.close()
-            return data
+            return all_data
         except pymysql.Error as e:
             print(f"Error fetching data from Cloud SQL: {e}")
             return None

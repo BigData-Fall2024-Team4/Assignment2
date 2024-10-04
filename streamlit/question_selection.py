@@ -4,12 +4,21 @@ from gcp_utils import get_data_from_gcp
 def question_selection_page():
     st.title("Question Selection")
     
-    # Fetch data from the GCP database
-    data = get_data_from_gcp()
+    # Add radio buttons for file type selection
+    file_type = st.radio("Select file type:", ("PDF", "Other"))
+    
+    # Add radio buttons for dataset selection
+    dataset = st.radio("Select dataset:", ("Validation", "Test", "Both"))
+    
+    # Fetch data from the GCP database based on file type and dataset
+    if file_type == "PDF":
+        data = get_data_from_gcp('pdf', dataset.lower())
+    else:
+        data = get_data_from_gcp('other', dataset.lower())
 
     if data:
         # Create a list of questions
-        questions = [""] + [item['question'] for item in data]
+        questions = [""] + [f"{item['question']} ({item['file_name']})" for item in data]
 
         # Dropdown for selecting a question
         selected_question = st.selectbox("Select a question:", questions, index=0)
@@ -21,10 +30,11 @@ def question_selection_page():
                     st.session_state.pop('openai_response')
 
                 # Set the selected question and task_id
-                selected_task = next((item for item in data if item['question'] == selected_question), None)
+                selected_task = next((item for item in data if f"{item['question']} ({item['file_name']})" == selected_question), None)
                 if selected_task:
-                    st.session_state.selected_question = selected_question
+                    st.session_state.selected_question = selected_task['question']
                     st.session_state.selected_task_id = selected_task['task_id']
+                    st.session_state.selected_file_name = selected_task['file_name']
                     st.session_state.current_page = "Answer Comparison"
                     st.rerun()
                 else:
