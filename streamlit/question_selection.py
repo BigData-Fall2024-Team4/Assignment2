@@ -4,6 +4,11 @@ from gcp_utils import get_data_from_gcp
 def question_selection_page():
     st.title("Question Selection")
     
+    # Add a logout button
+    if st.sidebar.button("Logout"):
+        st.session_state['logged_in'] = False
+        st.rerun()
+    
     # Fetch data from the GCP database
     data = get_data_from_gcp()
 
@@ -33,5 +38,3 @@ def question_selection_page():
                 st.warning("Please select a question before submitting.")
     else:
         st.error("No data available. Please check your database connection.")
-
-# Remove the main() function and __main__ check
