@@ -3,6 +3,11 @@ from gcp_utils import get_data_from_gcp
 
 def question_selection_page():
     st.title("Question Selection")
+        # Add a logout button
+    if st.sidebar.button("Logout"):
+        st.session_state['logged_in'] = False
+        st.rerun()
+    
     
     # Add radio buttons for file type selection
     file_type = st.radio("Select file type:", ("PDF", "Other"))
