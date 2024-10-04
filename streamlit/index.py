@@ -1,7 +1,8 @@
 import streamlit as st
+from question_selection import question_selection_page
 
-# Set the title of the app
-st.title("Hello, World!")
+def main():
+    question_selection_page()
 
-# Display a message
-st.write("Welcome to my first Streamlit app!")
+if __name__ == "__main__":
+    main()
