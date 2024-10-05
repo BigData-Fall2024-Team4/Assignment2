@@ -60,9 +60,6 @@ def preprocess_pdf(**kwargs):
     for page in reader.pages:
         output_text += page.extract_text()  # Extract text from each page
 
-    # For more complex processing like handling tables, you might need additional tools.
-    # Example: Convert tables to text or other processing based on your requirement
-    
     # Save the processed text to a local file
     processed_text_file = local_pdf_path.replace('.pdf', '_processed.txt')
     with open(processed_text_file, 'w') as f:
