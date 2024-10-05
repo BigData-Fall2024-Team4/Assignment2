@@ -54,21 +54,43 @@ def setup_gcp_clients():
 
 def create_table(cursor, connection, table_name):
     """Creates the table for cases if it doesn't exist."""
-    cursor.execute(f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            task_id VARCHAR(255),
-            question TEXT,
-            level VARCHAR(50),
-            final_answer TEXT,
-            file_name VARCHAR(255),
-            steps TEXT,
-            time_taken VARCHAR(50),
-            tools TEXT,
-            file_path VARCHAR(500),
-            annotator_metadata TEXT
-        )
-    """)
+    if table_name == "users":
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255),
+                password VARCHAR(255),
+                email VARCHAR(255),
+                user_history_id INT
+            )
+        """)
+    elif table_name == "user_history":
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_history_id INT,
+                user_question TEXT,
+                user_attempt_answer_1 TEXT,
+                user_attempt_answer_2 TEXT,
+                question_level VARCHAR(50)
+            )
+        """)
+    else:
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                task_id VARCHAR(255),
+                question TEXT,
+                level VARCHAR(50),
+                final_answer TEXT,
+                file_name VARCHAR(255),
+                steps TEXT,
+                time_taken VARCHAR(50),
+                tools TEXT,
+                file_path VARCHAR(500),
+                annotator_metadata TEXT
+            )
+        """)
     connection.commit()
 
 def upload_to_gcs(bucket, local_file_path, file_name):
@@ -132,6 +154,10 @@ def main():
         table_name = f"{dataset}_cases"
         create_table(cursor, connection, table_name)
         process_metadata(file_path, cursor, connection, bucket, local_clone_dir, dataset)
+
+    # Create new tables
+    create_table(cursor, connection, "users")
+    create_table(cursor, connection, "user_history")
 
 if __name__ == "__main__":
     main()
