@@ -34,62 +34,83 @@ def setup_gcp_storage():
     bucket = storage_client.get_bucket(bucket_name)
     return bucket
 
-# Download PDF from GCP bucket
-def download_pdfs_from_gcp(task_id, **kwargs):
+# Get all PDF file names from test and validation folders
+def list_pdf_files_from_gcp(**kwargs):
     bucket = setup_gcp_storage()
-    file_name = kwargs['task_instance'].xcom_pull(task_ids=task_id)
+    # List files from both test and validation folders
+    test_files = [blob.name for blob in bucket.list_blobs(prefix='test/') if blob.name.endswith('.pdf')]
+    validation_files = [blob.name for blob in bucket.list_blobs(prefix='validation/') if blob.name.endswith('.pdf')]
+    
+    # Combine test and validation files
+    all_files = test_files + validation_files
+    
+    # Push the list of files for downstream tasks
+    kwargs['task_instance'].xcom_push(key='pdf_files', value=all_files)
+    print(f"Found {len(all_files)} PDF files in the bucket.")
+    return all_files
+
+# Download PDF from GCP bucket
+def download_pdfs_from_gcp(**kwargs):
+    bucket = setup_gcp_storage()
+    pdf_files = kwargs['task_instance'].xcom_pull(task_ids='list_pdf_files_from_gcp', key='pdf_files')
     
     # Create a local directory to store downloaded PDFs
     local_pdf_dir = '/tmp/gaia_pdfs/'
     os.makedirs(local_pdf_dir, exist_ok=True)
     
-    # Download the file from GCP
-    blob = bucket.blob(file_name)
-    local_pdf_path = os.path.join(local_pdf_dir, file_name)
-    blob.download_to_filename(local_pdf_path)
-    return local_pdf_path
+    # Download the files from GCP
+    local_files = []
+    for file_name in pdf_files:
+        blob = bucket.blob(file_name)
+        local_pdf_path = os.path.join(local_pdf_dir, os.path.basename(file_name))
+        blob.download_to_filename(local_pdf_path)
+        local_files.append(local_pdf_path)
+        print(f"Downloaded {file_name} to {local_pdf_path}")
+    
+    return local_files
 
 # Extract text and preprocess the PDF file
-def preprocess_pdf(**kwargs):
-    local_pdf_path = kwargs['task_instance'].xcom_pull(task_ids='download_pdfs_from_gcp')
-    output_text = ''
+def preprocess_pdfs(**kwargs):
+    local_files = kwargs['task_instance'].xcom_pull(task_ids='download_pdfs_from_gcp')
+    processed_files = []
     
-    # Extract text from the PDF using PyPDF2
-    reader = PdfReader(local_pdf_path)
-    
-    for page in reader.pages:
-        output_text += page.extract_text()  # Extract text from each page
+    for local_pdf_path in local_files:
+        output_text = ''
+        reader = PdfReader(local_pdf_path)
+        
+        for page in reader.pages:
+            output_text += page.extract_text()  # Extract text from each page
 
-    # Save the processed text to a local file
-    processed_text_file = local_pdf_path.replace('.pdf', '_processed.txt')
-    with open(processed_text_file, 'w') as f:
-        f.write(output_text)
+        # Save the processed text to a local file
+        processed_text_file = local_pdf_path.replace('.pdf', '_processed.txt')
+        with open(processed_text_file, 'w') as f:
+            f.write(output_text)
+        
+        processed_files.append(processed_text_file)
+        print(f"Processed {local_pdf_path}, saved text to {processed_text_file}")
     
-    return processed_text_file
+    return processed_files
 
 # Upload processed file to GCP
-def upload_processed_file_to_gcp(**kwargs):
+def upload_processed_files_to_gcp(**kwargs):
     bucket = setup_gcp_storage()
-    processed_text_file = kwargs['task_instance'].xcom_pull(task_ids='preprocess_pdf')
+    processed_files = kwargs['task_instance'].xcom_pull(task_ids='preprocess_pdfs')
     
-    # Upload the processed file to GCP
-    processed_file_name = os.path.basename(processed_text_file)
-    blob = bucket.blob(f"processed/{processed_file_name}")
-    blob.upload_from_filename(processed_text_file)
+    # Upload the processed files to GCP
+    for processed_file in processed_files:
+        processed_file_name = os.path.basename(processed_file)
+        blob = bucket.blob(f"processed/{processed_file_name}")
+        blob.upload_from_filename(processed_file)
+        print(f"Uploaded processed file: {processed_file_name} to GCP.")
     
-    print(f"Uploaded processed file: {processed_file_name} to GCP.")
-    return processed_file_name
-
-# Task 1: Dummy task to provide a file name (In a real case, this will be fetched from metadata)
-def provide_pdf_file_name(**kwargs):
-    file_name = 'sample_file.pdf'  # Replace this with actual logic to fetch from metadata
-    return file_name
+    return processed_files
 
 # Define the tasks in the DAG
 with dag:
-    provide_file_name_task = PythonOperator(
-        task_id='provide_pdf_file_name',
-        python_callable=provide_pdf_file_name
+    list_files_task = PythonOperator(
+        task_id='list_pdf_files_from_gcp',
+        python_callable=list_pdf_files_from_gcp,
+        provide_context=True
     )
     
     download_pdfs_task = PythonOperator(
@@ -98,17 +119,17 @@ with dag:
         provide_context=True
     )
     
-    preprocess_pdf_task = PythonOperator(
-        task_id='preprocess_pdf',
-        python_callable=preprocess_pdf,
+    preprocess_pdfs_task = PythonOperator(
+        task_id='preprocess_pdfs',
+        python_callable=preprocess_pdfs,
         provide_context=True
     )
     
-    upload_processed_file_task = PythonOperator(
-        task_id='upload_processed_file_to_gcp',
-        python_callable=upload_processed_file_to_gcp,
+    upload_processed_files_task = PythonOperator(
+        task_id='upload_processed_files_to_gcp',
+        python_callable=upload_processed_files_to_gcp,
         provide_context=True
     )
     
     # Task dependencies
-    provide_file_name_task >> download_pdfs_task >> preprocess_pdf_task >> upload_processed_file_task
+    list_files_task >> download_pdfs_task >> preprocess_pdfs_task >> upload_processed_files_task
