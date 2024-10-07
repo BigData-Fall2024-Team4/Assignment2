@@ -23,7 +23,6 @@ def load_sql_db_config():
         return None
 
 class User(BaseModel):
-    name: str
     email: str
     password: str
 
@@ -56,7 +55,6 @@ def login_user(user: User):
     connection = load_sql_db_config()
     if not connection:
         raise HTTPException(status_code=500, detail="Database connection failed")
-    
     try:
         with connection.cursor() as cursor:
             sql = "SELECT * FROM users WHERE email = %s AND password = %s"
