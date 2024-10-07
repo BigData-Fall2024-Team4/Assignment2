@@ -1,9 +1,9 @@
 import streamlit as st
 import requests
 from question_selection import question_selection_page
+import os
 
-FASTAPI_URL = "http://localhost:8000"  # Assuming FastAPI is running on port 8000
-
+FASTAPI_URL = os.getenv("FASTAPI_URL", "http://fastapi-app:8000")
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
