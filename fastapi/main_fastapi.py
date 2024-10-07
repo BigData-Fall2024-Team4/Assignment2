@@ -94,11 +94,3 @@ def add_user_history(history: UserHistory):
         raise HTTPException(status_code=400, detail=f"Failed to add user history: {str(e)}")
     finally:
         connection.close()
-
-@app.get("/test-sql-connection")
-def test_sql_connection():
-    connection = load_sql_db_config()
-    if connection:
-        return {"message": "Successfully connected to Cloud SQL!"}
-    else:
-        return {"error": "Failed to connect to Cloud SQL."}
