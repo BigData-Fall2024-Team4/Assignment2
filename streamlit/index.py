@@ -8,11 +8,27 @@ if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
 def register_user(name, email, password):
-    response = requests.post(f"{FASTAPI_URL}/register", json={"name": name, "email": email, "password": password})
-    if response.status_code == 200:
-        return True, "Registration successful!"
-    else:
-        return False, response.json().get("detail", "Registration failed!")
+    try:
+        response = requests.post(f"{FASTAPI_URL}/register", json={"name": name, "email": email, "password": password})
+        if response.status_code == 200:
+            return True, "Registration successful!"
+        else:
+            # Handle specific validation errors (e.g., minimum password length)
+            try:
+                error_details = response.json().get("detail", "Registration failed!")
+                if isinstance(error_details, list):
+                    error_messages = []
+                    for err in error_details:
+                        # Example: Displaying 'password' validation error: 'Password must be at least 8 characters long'
+                        location = ".".join(err.get('loc', []))  # Shows the field where the error occurred (e.g., 'password')
+                        message = err.get('msg', '')  # The actual error message
+                        error_messages.append(f"{location}: {message}")
+                    return False, "; ".join(error_messages)
+                return False, error_details
+            except requests.exceptions.JSONDecodeError:
+                return False, "Registration failed due to a server error. Please try again."
+    except requests.RequestException as e:
+        return False, f"An error occurred: {str(e)}"
 
 def authenticate_user(email, password):
     response = requests.post(f"{FASTAPI_URL}/login", json={"email": email, "password": password})
