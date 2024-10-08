@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, HTTPException, Query
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr, constr, validator
@@ -106,6 +105,27 @@ def login_user(user: UserLogin):
     finally:
         connection.close()
 
+
+class QuestionData(BaseModel):
+    task_id: str
+    question: str
+    file_name: str
+
+def get_gcp_connection():
+    """Establishes a connection to the GCP Cloud SQL database."""
+    try:
+        connection = pymysql.connect(
+            user=os.getenv("GCP_SQL_USER"),
+            password=os.getenv("GCP_SQL_PASSWORD"),
+            host=os.getenv("GCP_SQL_HOST"),
+            database=os.getenv("GCP_SQL_DATABASE"),
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        return connection
+    except pymysql.Error as e:
+        raise HTTPException(status_code=400, detail=f"Failed to add user history: {str(e)}")
+    finally:
+        connection.close()
 
 class QuestionData(BaseModel):
     task_id: str
