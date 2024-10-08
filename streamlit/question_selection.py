@@ -1,25 +1,38 @@
 import streamlit as st
-from gcp_utils import get_data_from_gcp
+import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+API_URL = os.getenv("API_URL", "http://fastapi-app:8000")
+
+def get_data_from_gcp(file_type, dataset):
+    """Fetches question data from the FastAPI backend."""
+    try:
+        response = requests.get(f"{API_URL}/questions", params={"file_type": file_type, "dataset": dataset})
+        response.raise_for_status()  # Raises an HTTPError for bad responses
+        return response.json()  # Returns the data as JSON
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to connect to the API: {str(e)}")
+        return None
 
 def question_selection_page():
     st.title("Question Selection")
-        # Add a logout button
+
+    # Add a logout button
     if st.sidebar.button("Logout"):
         st.session_state['logged_in'] = False
         st.rerun()
-    
-    
+
     # Add radio buttons for file type selection
-    file_type = st.radio("Select file type:", ("PDF", "Other"))
+    file_type = st.radio("Select file type:", ("All", "PDF", "Other"))
     
     # Add radio buttons for dataset selection
     dataset = st.radio("Select dataset:", ("Validation", "Test", "Both"))
     
-    # Fetch data from the GCP database based on file type and dataset
-    if file_type == "PDF":
-        data = get_data_from_gcp('pdf', dataset.lower())
-    else:
-        data = get_data_from_gcp('other', dataset.lower())
+    # Fetch data from the FastAPI backend based on file type and dataset
+    data = get_data_from_gcp(file_type.lower(), dataset.lower())
 
     if data:
         # Create a list of questions
@@ -47,6 +60,7 @@ def question_selection_page():
             else:
                 st.warning("Please select a question before submitting.")
     else:
-        st.error("No data available. Please check your database connection.")
+        st.error("No data available. Please check your API connection.")
 
-# Remove the main() function and __main__ check
+if __name__ == "__main__":
+    question_selection_page()
