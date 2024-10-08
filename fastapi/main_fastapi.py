@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr, constr, validator
+from pydantic import BaseModel
 import pymysql
 import os
 from dotenv import load_dotenv
