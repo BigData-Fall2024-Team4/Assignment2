@@ -25,11 +25,18 @@ def question_selection_page():
         st.session_state['logged_in'] = False
         st.rerun()
 
-    # Add radio buttons for file type selection
-    file_type = st.radio("Select file type:", ("All", "PDF", "Other"))
+    # Create two columns for the radio buttons
+    col1, col2 = st.columns(2)
+
+    # Add radio buttons for file type selection in the first column
+    with col1:
+        st.write("Select file type:")
+        file_type = st.radio("File type", ("All", "PDF", "Other"), label_visibility="collapsed")
     
-    # Add radio buttons for dataset selection
-    dataset = st.radio("Select dataset:", ("Validation", "Test", "Both"))
+    # Add radio buttons for dataset selection in the second column
+    with col2:
+        st.write("Select dataset:")
+        dataset = st.radio("Dataset", ("Validation", "Test", "Both"), label_visibility="collapsed")
     
     # Fetch data from the FastAPI backend based on file type and dataset
     data = get_data_from_gcp(file_type.lower(), dataset.lower())
@@ -40,6 +47,12 @@ def question_selection_page():
 
         # Dropdown for selecting a question
         selected_question = st.selectbox("Select a question:", questions, index=0)
+
+        # Display file name in a non-editable text box
+        if selected_question:
+            selected_task = next((item for item in data if item['question'] == selected_question), None)
+            if selected_task:
+                st.text_input("Associated File:", value=selected_task['file_name'], disabled=True)
 
         if st.button("Submit"):
             if selected_question:
