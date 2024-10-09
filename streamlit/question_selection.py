@@ -1,6 +1,8 @@
 import streamlit as st
 import requests
 import os
+from submit_page import submit_page
+from summary_page import summary_page
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,71 +22,54 @@ def get_data_from_gcp(file_type, dataset):
 def question_selection_page():
     st.title("Question Selection")
 
-    # Add a logout button
-    if st.sidebar.button("Logout"):
-        st.session_state['logged_in'] = False
-        st.rerun()
-
-    # Create two columns for the radio buttons
+    # Question Selection page content
     col1, col2 = st.columns(2)
 
-    # Add radio buttons for file type selection in the first column
     with col1:
         st.write("Select file type:")
-        file_type = st.radio("File type", ("All", "PDF", "Other"), label_visibility="collapsed")
+        file_type = st.radio("File type", ("All", "PDF", "Other"), label_visibility="collapsed", key="file_type_radio")
     
-    # Add radio buttons for dataset selection in the second column
     with col2:
         st.write("Select dataset:")
-        dataset = st.radio("Dataset", ("Validation", "Test", "Both"), label_visibility="collapsed")
+        dataset = st.radio("Dataset", ("Validation", "Test", "Both"), label_visibility="collapsed", key="dataset_radio")
     
-    # Fetch data from the FastAPI backend based on file type and dataset
     data = get_data_from_gcp(file_type.lower(), dataset.lower())
 
     if data:
-       # Create a list of questions
         questions = [""] + [item['question'] for item in data]
+        selected_question = st.selectbox("Select a question:", questions, index=0, key="question_select")
 
-        # Dropdown for selecting a question
-        selected_question = st.selectbox("Select a question:", questions, index=0)
-
-        # Display file name in a non-editable text box
+        selected_task = None
         if selected_question:
             selected_task = next((item for item in data if item['question'] == selected_question), None)
             if selected_task:
-                st.text_input("Associated File:", value=selected_task['file_name'], disabled=True)
+                st.text_input("Associated File:", value=selected_task['file_name'], disabled=True, key="associated_file")
 
-        # Add title for API selection
         st.write("### Which API should we use to extract pdf data into text?")
+        selected_api = st.radio("Select API", ["PyPDF", "Azure"], horizontal=True, key="api_radio")
 
-        # Create two columns for the new radio buttons
-        api_col1, api_col2 = st.columns(2)
-
-        # Add radio buttons for API selection
-        selected_api = st.radio("Select API", ["PyPDF", "Azure"], horizontal=True)
-
-        if st.button("Submit"):
-            if selected_question and selected_question != "":
-                # Reset openai_response when a new question is selected
-                if 'openai_response' in st.session_state:
-                    st.session_state.pop('openai_response')
-
-                # Set the selected question and task_id
-                task_id = selected_question.split("(ID: ")[-1].strip(")")
-                selected_task = next((item for item in data if item['task_id'] == task_id), None)
-                if selected_task:
-                    st.session_state.selected_question = selected_task['question']
-                    st.session_state.selected_task_id = selected_task['task_id']
-                    st.session_state.selected_file_name = selected_task['file_name']
-                    st.session_state.selected_api = selected_api
-                    st.session_state.current_page = "Answer Comparison"
-                    st.rerun()
-                else:
-                    st.warning("Error retrieving task information.")
-            else:
-                st.warning("Please select a question before submitting.")
+        if selected_task:
+            st.session_state.selected_question = selected_task['question']
+            st.session_state.selected_task_id = selected_task['task_id']
+            st.session_state.selected_file_name = selected_task['file_name']
+            st.session_state.selected_api = selected_api
+        else:
+            st.warning("Please select a question before proceeding.")
     else:
         st.error("No data available. Please check your API connection.")
 
-if __name__ == "__main__":
+    # Add buttons for Submit and Summary pages
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Submit"):
+            submit_page()
+    
+    with col2:
+        if st.button("Summary"):
+            summary_page()
+
+def main():
     question_selection_page()
+if __name__ == "__main__":
+    main()
