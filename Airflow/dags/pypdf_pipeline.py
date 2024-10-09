@@ -2,20 +2,16 @@ import os
 import json
 import subprocess
 import shutil
+import pymysql
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from google.cloud import storage
 from PyPDF2 import PdfReader
 from datetime import datetime
 from airflow.utils.dates import days_ago
-from env_var import GIT_USERNAME, GIT_TOKEN, GIT_REPO_URL, GCP_BUCKET_NAME, GCP_SERVICE_ACCOUNT_FILE
+from env_var import GIT_USERNAME, GIT_TOKEN, GIT_REPO_URL, GCP_BUCKET_NAME, GCP_SERVICE_ACCOUNT_FILE, GCP_SQL_USER, GCP_SQL_PASSWORD, GCP_SQL_HOST, GCP_SQL_DATABASE
 
 # New imports for enhanced PDF processing
-import pytesseract
-from pdf2image import convert_from_path
-import cv2
-import numpy as np
-import pandas as pd
 import tabula
 
 # Default arguments for the DAG
@@ -35,34 +31,22 @@ dag = DAG(
 # Step 1: Clone the dataset from Hugging Face including LFS files
 def clone_repository(**kwargs):
     LOCAL_CLONE_DIR = "./GAIA"
-
     git_url_with_credentials = GIT_REPO_URL.replace("https://", f"https://{GIT_USERNAME}:{GIT_TOKEN}@")
 
-    # Check if the repository directory exists
     if os.path.exists(LOCAL_CLONE_DIR):
         try:
-            # Delete the existing directory
             print(f"Directory {LOCAL_CLONE_DIR} exists. Deleting it...")
             shutil.rmtree(LOCAL_CLONE_DIR)
         except Exception as e:
             print(f"Error deleting directory {LOCAL_CLONE_DIR}: {e}")
             return None
 
-    # Now proceed to clone the repository again
     try:
-        # Clone the repository
         print("Cloning the repository with Git LFS support...")
         subprocess.run(["git", "clone", git_url_with_credentials, LOCAL_CLONE_DIR], check=True)
-        
-        # Change the working directory to the cloned repo
         os.chdir(LOCAL_CLONE_DIR)
-
-        # Initialize Git LFS in case it's not initialized
         subprocess.run(["git", "lfs", "install"], check=True)
-
-        # Pull the LFS files after cloning the repository
         subprocess.run(["git", "lfs", "pull"], check=True)
-
         print(f"Successfully cloned repository into {LOCAL_CLONE_DIR} and downloaded all LFS files.")
     except subprocess.CalledProcessError as e:
         print(f"Error cloning repository or downloading LFS files: {e}")
@@ -86,7 +70,6 @@ def filter_pdf_files(**kwargs):
                 for line in f:
                     data = json.loads(line.strip())
                     if data.get('file_name', '').endswith('.pdf'):
-                        # Add the dataset type for later reference
                         data['dataset'] = dataset
                         pdf_files.append(data)
                         count += 1
@@ -95,7 +78,6 @@ def filter_pdf_files(**kwargs):
 
         dataset_counts[dataset] = count
     
-    # Print the count of PDFs in each dataset
     for dataset, count in dataset_counts.items():
         print(f"Found {count} PDF files in {dataset} dataset.")
 
@@ -112,18 +94,15 @@ def process_pdf(pdf_file, **kwargs):
         print(f"PDF not found: {pdf_path}")
         return None
 
-    pdf_size = os.path.getsize(pdf_path)
     output_txt_path = pdf_path.replace('.pdf', '.txt')
     
     try:
-        # Ensure the file is opened and closed properly
         with open(pdf_path, 'rb') as pdf_file_obj:
             reader = PdfReader(pdf_file_obj)
             basic_text = ''
             for page in reader.pages:
                 basic_text += page.extract_text() + '\n'
 
-        # Extract tables using Tabula
         try:
             tables = tabula.read_pdf(pdf_path, pages='all', multiple_tables=True)
         except Exception as e:
@@ -135,7 +114,6 @@ def process_pdf(pdf_file, **kwargs):
             table_text += f"\n--- Table {i+1} ---\n"
             table_text += table.to_csv(index=False) + '\n'
 
-        # Write the combined text (basic_text + tables)
         with open(output_txt_path, 'w', encoding='utf-8') as txt_file:
             txt_file.write(f"--- Basic Text ---\n{basic_text}\n\n")
             txt_file.write(f"--- Table Text ---\n{table_text}")
@@ -146,18 +124,91 @@ def process_pdf(pdf_file, **kwargs):
     except Exception as e:
         print(f"Error processing PDF: {pdf_path}")
         print(f"Error details: {str(e)}")
-        print(f"PDF file size: {pdf_size} bytes")
         return None
+
+# Function to ensure the SQL table exists
+def ensure_table_exists():
+    try:
+        connection = pymysql.connect(
+            host=GCP_SQL_HOST,
+            user=GCP_SQL_USER,
+            password=GCP_SQL_PASSWORD,
+            database=GCP_SQL_DATABASE,
+        )
+        cursor = connection.cursor()
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS files_pypdf (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            file_name VARCHAR(255) NOT NULL,
+            processed_file_name VARCHAR(255) NOT NULL,
+            dataset VARCHAR(255) NOT NULL,
+            processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        cursor.execute(create_table_query)
+        connection.commit()
+        cursor.close()
+        connection.close()
+        print("Ensured that files_pypdf table exists with processed_file_name column.")
+    except Exception as e:
+        print(f"Error ensuring table exists: {str(e)}")
+
+# Function to insert processed file names into the GCP SQL database
+def insert_file_name_to_sql(file_name, processed_file_name, dataset):
+    try:
+        ensure_table_exists()  # Make sure the table exists before inserting
+        connection = pymysql.connect(
+            host=GCP_SQL_HOST,
+            user=GCP_SQL_USER,
+            password=GCP_SQL_PASSWORD,
+            database=GCP_SQL_DATABASE,
+        )
+        
+        cursor = connection.cursor()
+        sql_query = """
+        INSERT INTO files_pypdf (file_name, processed_file_name, dataset)
+        VALUES (%s, %s, %s)
+        """
+        cursor.execute(sql_query, (file_name, processed_file_name, dataset))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        print(f"Inserted {file_name} and {processed_file_name} into files_pypdf table.")
+        
+    except Exception as e:
+        print(f"Error inserting {file_name} into SQL: {str(e)}")
+
+
+# Updated function to process all PDFs and insert into SQL
+def process_all_pdfs(**kwargs):
+    pdf_files = kwargs['ti'].xcom_pull(task_ids='filter_pdfs')
+    processed_files = []
+    failed_files = []
     
+    for pdf_file in pdf_files:
+        txt_file_path = process_pdf(pdf_file)
+        if txt_file_path:
+            processed_files.append({
+                'file_path': txt_file_path,
+                'dataset': pdf_file['dataset']
+            })
+            # Use the .txt filename along with the original .pdf filename
+            txt_file_name = os.path.basename(txt_file_path)
+            insert_file_name_to_sql(pdf_file['file_name'], txt_file_name, pdf_file['dataset'])
+        else:
+            failed_files.append(pdf_file['file_name'])
+    
+    print(f"Processing complete. Processed: {len(processed_files)}, Failed: {len(failed_files)}")
+    
+    kwargs['ti'].xcom_push(key='processed_files', value=processed_files)
+    kwargs['ti'].xcom_push(key='failed_files', value=failed_files)
+
 # Step 4: Upload the .txt files to GCP, storing them in 'test' or 'validation' folders based on the dataset
 def upload_to_gcp(txt_file_path, dataset, **kwargs):
     try:
         storage_client = storage.Client.from_service_account_json(GCP_SERVICE_ACCOUNT_FILE)
         bucket = storage_client.bucket(GCP_BUCKET_NAME)
-        
-        # Add the dataset folder (test or validation) to the blob name
         destination_blob_name = f"{dataset}/{os.path.basename(txt_file_path)}"
-        
         blob = bucket.blob(destination_blob_name)
         blob.upload_from_filename(txt_file_path)
         print(f"{txt_file_path} uploaded to {GCP_BUCKET_NAME}/{dataset}.")
@@ -167,37 +218,13 @@ def upload_to_gcp(txt_file_path, dataset, **kwargs):
         print(f"Error details: {str(e)}")
         return False
 
-# New function to process all PDFs
-def process_all_pdfs(**kwargs):
-    pdf_files = kwargs['ti'].xcom_pull(task_ids='filter_pdfs')
-    processed_files = []
-    failed_files = []
-    
-    for pdf_file in pdf_files:
-        txt_file_path = process_pdf(pdf_file)
-        if txt_file_path:
-            # Add dataset information to the processed file path
-            processed_files.append({
-                'file_path': txt_file_path,
-                'dataset': pdf_file['dataset']
-            })
-        else:
-            failed_files.append(pdf_file['file_name'])
-    
-    print(f"Processing complete. Processed: {len(processed_files)}, Failed: {len(failed_files)}")
-    
-    # Push the results to XCom for the next task
-    kwargs['ti'].xcom_push(key='processed_files', value=processed_files)
-    kwargs['ti'].xcom_push(key='failed_files', value=failed_files)
-
-# New function to upload all processed files
+# Function to upload all processed files
 def upload_all_files(**kwargs):
     processed_files = kwargs['ti'].xcom_pull(task_ids='process_pdfs', key='processed_files')
     uploaded_count = 0
     failed_count = 0
     
     for txt_file_path in processed_files:
-        # Extract the dataset (test or validation) from the file metadata
         dataset = txt_file_path['dataset']
         txt_file_full_path = txt_file_path['file_path']
         
@@ -223,7 +250,7 @@ with dag:
         provide_context=True
     )
 
-    # Process all PDF files
+    # Process all PDF files and insert the file names into GCP SQL
     process_pdfs = PythonOperator(
         task_id='process_pdfs',
         python_callable=process_all_pdfs,
