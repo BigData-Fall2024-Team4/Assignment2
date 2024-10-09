@@ -8,22 +8,22 @@ import os
 FASTAPI_URL = os.getenv("FASTAPI_URL", "http://fastapi-app:8000")
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
+if 'token' not in st.session_state:
+    st.session_state['token'] = None
 
 def register_user(name, email, password):
     try:
-        response = requests.post(f"{FASTAPI_URL}/register", json={"name": name, "email": email, "password": password})
+        response = requests.post(f"{FASTAPI_URL}/register", json={"email": email, "password": password})
         if response.status_code == 200:
             return True, "Registration successful!"
         else:
-            # Handle specific validation errors (e.g., minimum password length)
             try:
                 error_details = response.json().get("detail", "Registration failed!")
                 if isinstance(error_details, list):
                     error_messages = []
                     for err in error_details:
-                        # Example: Displaying 'password' validation error: 'Password must be at least 8 characters long'
-                        location = ".".join(err.get('loc', []))  # Shows the field where the error occurred (e.g., 'password')
-                        message = err.get('msg', '')  # The actual error message
+                        location = ".".join(err.get('loc', []))
+                        message = err.get('msg', '')
                         error_messages.append(f"{location}: {message}")
                     return False, "; ".join(error_messages)
                 return False, error_details
@@ -33,8 +33,10 @@ def register_user(name, email, password):
         return False, f"An error occurred: {str(e)}"
 
 def authenticate_user(email, password):
-    response = requests.post(f"{FASTAPI_URL}/login", json={"email": email, "password": password})
+    response = requests.post(f"{FASTAPI_URL}/token", data={"username": email, "password": password})
     if response.status_code == 200:
+        token_data = response.json()
+        st.session_state['token'] = token_data['access_token']
         return True, "Login successful!"
     else:
         return False, "Incorrect email or password."
@@ -73,13 +75,16 @@ def show_register_page():
                 st.error(message)
 
 def add_user_history(user_email, question, attempt1, attempt2, level):
-    response = requests.post(f"{FASTAPI_URL}/user-history", json={
-        "user_email": user_email,
-        "user_question": question,
-        "user_attempt_answer_1": attempt1,
-        "user_attempt_answer_2": attempt2,
-        "question_level": level
-    })
+    headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+    response = requests.post(f"{FASTAPI_URL}/user-history", 
+                             json={
+                                 "user_email": user_email,
+                                 "user_question": question,
+                                 "user_attempt_answer_1": attempt1,
+                                 "user_attempt_answer_2": attempt2,
+                                 "question_level": level
+                             },
+                             headers=headers)
     if response.status_code != 200:
         st.error("Failed to save user history")
 
@@ -108,5 +113,4 @@ def main():
         elif nav_option == "Summary":
             summary_page()
 
-if __name__ == '__main__':
-    main()
+main()
