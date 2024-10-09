@@ -10,20 +10,27 @@ API_URL = os.getenv("API_URL", "http://fastapi-app:8000")
 def get_data_from_gcp(file_type, dataset):
     """Fetches question data from the FastAPI backend."""
     try:
-        response = requests.get(f"{API_URL}/questions", params={"file_type": file_type, "dataset": dataset})
+        headers = {"Authorization": f"Bearer {st.session_state.get('token', '')}"}
+        response = requests.get(f"{API_URL}/questions", params={"file_type": file_type, "dataset": dataset}, headers=headers)
         response.raise_for_status()  # Raises an HTTPError for bad responses
         return response.json()  # Returns the data as JSON
     except requests.exceptions.RequestException as e:
         st.error(f"Failed to connect to the API: {str(e)}")
         return None
 
+def logout():
+    """Handles user logout by clearing session state and token."""
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.session_state['logged_in'] = False
+    st.session_state['token'] = None
+    st.rerun()
+
 def question_selection_page():
     st.title("Question Selection")
 
-    # Add a logout button
     if st.sidebar.button("Logout"):
-        st.session_state['logged_in'] = False
-        st.rerun()
+            logout()
 
     # Create two columns for the radio buttons
     col1, col2 = st.columns(2)
