@@ -42,8 +42,8 @@ def question_selection_page():
     data = get_data_from_gcp(file_type.lower(), dataset.lower())
 
     if data:
-        # Create a list of questions
-        questions = [""] + [f"{item['question']} ({item['file_name']})" for item in data]
+       # Create a list of questions
+        questions = [""] + [item['question'] for item in data]
 
         # Dropdown for selecting a question
         selected_question = st.selectbox("Select a question:", questions, index=0)
@@ -54,18 +54,29 @@ def question_selection_page():
             if selected_task:
                 st.text_input("Associated File:", value=selected_task['file_name'], disabled=True)
 
+        # Add title for API selection
+        st.write("### Which API should we use to extract pdf data into text?")
+
+        # Create two columns for the new radio buttons
+        api_col1, api_col2 = st.columns(2)
+
+        # Add radio buttons for API selection
+        selected_api = st.radio("Select API", ["PyPDF", "Azure"], horizontal=True)
+
         if st.button("Submit"):
-            if selected_question:
+            if selected_question and selected_question != "":
                 # Reset openai_response when a new question is selected
                 if 'openai_response' in st.session_state:
                     st.session_state.pop('openai_response')
 
                 # Set the selected question and task_id
-                selected_task = next((item for item in data if f"{item['question']} ({item['file_name']})" == selected_question), None)
+                task_id = selected_question.split("(ID: ")[-1].strip(")")
+                selected_task = next((item for item in data if item['task_id'] == task_id), None)
                 if selected_task:
                     st.session_state.selected_question = selected_task['question']
                     st.session_state.selected_task_id = selected_task['task_id']
                     st.session_state.selected_file_name = selected_task['file_name']
+                    st.session_state.selected_api = selected_api
                     st.session_state.current_page = "Answer Comparison"
                     st.rerun()
                 else:
