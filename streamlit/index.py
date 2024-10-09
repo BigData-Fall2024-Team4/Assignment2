@@ -1,6 +1,8 @@
 import streamlit as st
 import requests
 from question_selection import question_selection_page
+from submit_page import submit_page
+from summary_page import summary_page
 import os
 
 FASTAPI_URL = os.getenv("FASTAPI_URL", "http://fastapi-app:8000")
@@ -82,11 +84,7 @@ def add_user_history(user_email, question, attempt1, attempt2, level):
         st.error("Failed to save user history")
 
 def main():
-    if st.session_state['logged_in']:
-        question_selection_page()
-        # After question_selection_page, you might want to add:
-        # add_user_history(st.session_state['user_email'], question, attempt1, attempt2, level)
-    else:
+    if not st.session_state['logged_in']:
         st.sidebar.title("Navigation")
         page = st.sidebar.radio("Go to", ["Login", "Register"])
         
@@ -94,6 +92,21 @@ def main():
             show_login_page()
         elif page == "Register":
             show_register_page()
+    else:
+        st.sidebar.title("Navigation")
+        nav_option = st.sidebar.radio("Go to", ["Question Selection", "Submit", "Summary"])
+        
+        if st.sidebar.button("Logout"):
+            st.session_state['logged_in'] = False
+            st.session_state['current_page'] = 'login'
+            st.rerun()
+        
+        if nav_option == "Question Selection":
+            question_selection_page()
+        elif nav_option == "Submit":
+            submit_page()
+        elif nav_option == "Summary":
+            summary_page()
 
 if __name__ == '__main__':
     main()
