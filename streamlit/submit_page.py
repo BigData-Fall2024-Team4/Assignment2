@@ -1,4 +1,3 @@
-# pages/1_Submit.py
 import streamlit as st
 import requests
 import os
@@ -12,11 +11,11 @@ def get_processed_file_content(file_name, api):
     """Fetches the processed file content from the appropriate GCP SQL table."""
     try:
         table = "files_pypdf" if api == "PyPDF" else "files_azure"
-        headers = {"Authorization": f"Bearer {st.session_state.get('token', '')}"}
+        # headers = {"Authorization": f"Bearer {st.session_state.get('token', '')}"}
         response = requests.get(
             f"{API_URL}/processed_file",
             params={"file_name": file_name, "table": table},
-            headers=headers
+            # headers=headers
         )
         response.raise_for_status()
         return response.json().get("processed_content", "No content available")
@@ -24,24 +23,25 @@ def get_processed_file_content(file_name, api):
         st.error(f"Failed to fetch processed file content: {str(e)}")
         return "Error fetching content"
 
-def submit_answer(question, file_name, processed_content):
+def submit_answer(question, processed_content, api,file_name):
     """Submits the answer to the FastAPI backend and gets OpenAI response."""
     try:
-        headers = {"Authorization": f"Bearer {st.session_state.get('token', '')}"}
+        # headers = {"Authorization": f"Bearer {st.session_state.get('token', '')}"}
         response = requests.post(
             f"{API_URL}/submit_answer",
             json={
                 "question": question,
-                "file_name": file_name,
-                "processed_content": processed_content
+                "processed_content": processed_content,
+                "api": api,
+                "file_name" : file_name
             },
-            headers=headers
+            # headers=headers
         )
         response.raise_for_status()
         return response.json().get("openai_response", "No response available")
     except requests.exceptions.RequestException as e:
         st.error(f"Failed to submit answer: {str(e)}")
-        return "Error submitting answer"
+        return f"Error submitting answer: {str(e)}"
 
 def submit_page():
     st.title("Submit Page")
@@ -52,7 +52,7 @@ def submit_page():
     selected_task_id = st.session_state.get('selected_task_id', 'No task selected')
     selected_file_name = st.session_state.get('selected_file_name', 'No file selected')
     selected_api = st.session_state.get('selected_api', 'No API selected')
-
+    
     st.write(f"**Selected Question:** {selected_question}")
     st.write(f"**Task ID:** {selected_task_id}")
     st.write(f"**File Name:** {selected_file_name}")
@@ -72,7 +72,7 @@ def submit_page():
     # Add submit button
     if st.button("Submit Answer"):
         with st.spinner("Submitting answer and generating response..."):
-            openai_response = submit_answer(selected_question, selected_file_name, processed_content)
+            openai_response = submit_answer(selected_question, processed_content, selected_api, selected_file_name)
         st.text_area("OpenAI Response:", value=openai_response, height=300)
     
     # Add a button to go back to the question selection page
