@@ -12,6 +12,7 @@ import logging
 from google.cloud import storage
 from google.oauth2 import service_account
 import openai
+from openai import OpenAI
 import os
 from pathlib import Path
 
@@ -31,6 +32,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # GCP bucket settings
 TXT_BUCKET_NAME= os.getenv("TXT_BUCKET_NAME")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 # Google Cloud Storage client setup
@@ -116,11 +118,21 @@ async def submit_answer(
         """
         
         try:
-            openai_response = openai.Completion.create(
-                engine="text-davinci-003",
-                prompt=prompt,
-                max_tokens=500,
-                temperature=0.7
+            # openai_response = openai.Completion.create(
+            #     engine="text-davinci-003",
+            #     prompt=prompt,
+            #     max_tokens=500,
+            #     temperature=0.7
+            # Create the OpenAI API call with the messages
+            response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a highly efficient AI assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300,
+            n=1,
+            temperature=0.7
         )
         except Exception as e:
             logger.error(f"OpenAI API error: {str(e)}")
@@ -128,8 +140,8 @@ async def submit_answer(
 
         
         # Extract the generated answer
-        answer = openai_response.choices[0].text.strip()
-        return {"openai_response": answer}
+        answer = response.choices[0].message.content.strip()
+        return {"response": answer}
     # except Exception as e:
     #     logger.error(f"OpenAI error occurred: {str(e)}")
     #     raise HTTPException(status_code=500, detail="Error with OpenAI API")

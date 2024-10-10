@@ -112,5 +112,6 @@ def main():
             submit_page()
         elif nav_option == "Summary":
             summary_page()
+    
 
 main()
