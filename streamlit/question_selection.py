@@ -57,7 +57,7 @@ def question_selection_page():
         # Show API selection only if the selected file type is "PDF"
         if file_type == "PDF":
             st.write("### Which API should we use to extract pdf data into text?")
-            selected_api = st.radio("Select API", ["PyPDF", "Azure"], horizontal=True, key="api_radio")
+            selected_api = st.radio("Select API", ["pypdf", "azure"], horizontal=True, key="api_radio")
 
             if selected_task:
                 st.session_state.selected_question = selected_task['question']

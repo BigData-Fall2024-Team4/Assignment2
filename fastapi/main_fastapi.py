@@ -13,6 +13,7 @@ from google.cloud import storage
 from google.oauth2 import service_account
 import openai
 import os
+from pathlib import Path
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -90,14 +91,18 @@ async def submit_answer(
     request: SubmitAnswerRequest,
     # token: str = Depends(get_current_user)
 ):
+    file_name1 = Path(request.file_name).stem
     try:
         # Determine the processed file name based on the API
+        # return request
+
         if request.api.lower() == "pypdf":
-            processed_file_name = f"{request.file_name}.txt"
+            processed_file_name = f"{file_name1}.txt"
         elif request.api.lower() == "azure":
-            processed_file_name = f"{request.file_name}_azure.txt"
+            processed_file_name = f"{file_name1}_azure.txt"
         else:
-            raise HTTPException(status_code=400, detail="Unsupported API type")
+            # raise HTTPException(status_code=400, detail="Unsupported API type")
+            return request
 
         # Get the processed file from ass2-airflow bucket
         processed_file_content = get_file_from_gcp(TXT_BUCKET_NAME, processed_file_name)
