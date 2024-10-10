@@ -1,26 +1,84 @@
 # pages/1_Submit.py
 import streamlit as st
+import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+API_URL = os.getenv("API_URL", "http://fastapi-app:8000")
+
+def get_processed_file_content(file_name, api):
+    """Fetches the processed file content from the appropriate GCP SQL table."""
+    try:
+        table = "files_pypdf" if api == "PyPDF" else "files_azure"
+        headers = {"Authorization": f"Bearer {st.session_state.get('token', '')}"}
+        response = requests.get(
+            f"{API_URL}/processed_file",
+            params={"file_name": file_name, "table": table},
+            headers=headers
+        )
+        response.raise_for_status()
+        return response.json().get("processed_content", "No content available")
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to fetch processed file content: {str(e)}")
+        return "Error fetching content"
+
+def submit_answer(question, file_name, processed_content):
+    """Submits the answer to the FastAPI backend and gets OpenAI response."""
+    try:
+        headers = {"Authorization": f"Bearer {st.session_state.get('token', '')}"}
+        response = requests.post(
+            f"{API_URL}/submit_answer",
+            json={
+                "question": question,
+                "file_name": file_name,
+                "processed_content": processed_content
+            },
+            headers=headers
+        )
+        response.raise_for_status()
+        return response.json().get("openai_response", "No response available")
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to submit answer: {str(e)}")
+        return "Error submitting answer"
 
 def submit_page():
     st.title("Submit Page")
     
     # Display all selected information
     st.subheader("Selected Information")
-    st.write(f"**Selected Question:** {st.session_state.get('selected_question', 'No question selected')}")
-    st.write(f"**Task ID:** {st.session_state.get('selected_task_id', 'No task selected')}")
-    st.write(f"**File Name:** {st.session_state.get('selected_file_name', 'No file selected')}")
-    st.write(f"**Selected API:** {st.session_state.get('selected_api', 'No API selected')}")
+    selected_question = st.session_state.get('selected_question', 'No question selected')
+    selected_task_id = st.session_state.get('selected_task_id', 'No task selected')
+    selected_file_name = st.session_state.get('selected_file_name', 'No file selected')
+    selected_api = st.session_state.get('selected_api', 'No API selected')
+
+    st.write(f"**Selected Question:** {selected_question}")
+    st.write(f"**Task ID:** {selected_task_id}")
+    st.write(f"**File Name:** {selected_file_name}")
+    st.write(f"**Selected API:** {selected_api}")
     
-    # Add a separator
-    st.markdown("---")
+    st.write("Processed File Content")
     
-    # Add your submit page specific code here
-    st.subheader("Submit Your Answer")
-    user_answer = st.text_area("Enter your answer here:", height=200)
+    # Check if the file is a PDF
+    if not selected_file_name or not selected_file_name.lower().endswith('.pdf'):
+        processed_content = "The file is not a PDF so there is no processed file for the same."
+        st.write(processed_content)
+    else:
+        with st.spinner("Fetching processed file content..."):
+            processed_content = get_processed_file_content(selected_file_name, selected_api)
+        st.text_area("Processed File Content:", value=processed_content, height=200, disabled=True)
     
+    # Add submit button
     if st.button("Submit Answer"):
-        if user_answer:
-            # Here you would typically send the answer to your backend
-            st.success("Answer submitted successfully!")
-        else:
-            st.warning("Please enter an answer before submitting.")
+        with st.spinner("Submitting answer and generating response..."):
+            openai_response = submit_answer(selected_question, selected_file_name, processed_content)
+        st.text_area("OpenAI Response:", value=openai_response, height=300)
+    
+    # Add a button to go back to the question selection page
+    if st.button("Back to Question Selection"):
+        st.session_state['page'] = "home"
+        st.experimental_rerun()
+
+if __name__ == "__main__":
+    submit_page()

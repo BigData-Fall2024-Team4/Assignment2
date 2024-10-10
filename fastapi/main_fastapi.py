@@ -9,20 +9,110 @@ import bcrypt
 import jwt
 from datetime import datetime, timedelta
 import logging
+from google.cloud import storage
+from google.oauth2 import service_account
+import openai
+import os
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-load_dotenv('.env')
+load_dotenv()
 
 app = FastAPI()
 
 # JWT settings
+openai.api_key = os.getenv("OPENAI_API_KEY")
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+# GCP bucket settings
+PYPDF_BUCKET_NAME = os.getenv("PYPDF_BUCKET_NAME")
+PDF_BUCKET_NAME = os.getenv("PDF_BUCKET_NAME")
+
+# Google Cloud Storage client setup
+credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+if credentials_path:
+    credentials = service_account.Credentials.from_service_account_file(credentials_path)
+    storage_client = storage.Client(credentials=credentials)
+else:
+    storage_client = storage.Client()
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Model for submitting answers
+class SubmitAnswerRequest(BaseModel):
+    question: str
+    file_name: str
+    processed_content: str
+    api: str  # Indicates which API (PyPDF or Azure) is used
+
+def get_file_from_gcp(bucket_name: str, file_name: str) -> str:
+    try:
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(file_name)
+        content = blob.download_as_text()
+        return content
+    except Exception as e:
+        logger.error(f"Failed to fetch file from GCP bucket: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving file from GCP Storage: {str(e)}")
+
+
+async def get_current_user(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        return email
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.post("/submit_answer")
+async def submit_answer(
+    request: SubmitAnswerRequest,
+    token: str = Depends(get_current_user)
+):
+    try:
+        # Determine the correct bucket based on the file type and API
+        if request.api.lower() == "pypdf":
+            if request.file_name.lower().endswith(".pdf"):
+                bucket_name = PDF_BUCKET_NAME
+            else:
+                bucket_name = PYPDF_BUCKET_NAME
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported API type")
+
+        # Fetch the processed content if not provided
+        if not request.processed_content:
+            processed_content = get_file_from_gcp(bucket_name, request.file_name)
+        else:
+            processed_content = request.processed_content
+
+        # Prepare the prompt for OpenAI
+        prompt = f"Question: {request.question}\nProcessed Content: {processed_content}\nAnswer:"
+        
+        # Call OpenAI's API to generate a response
+        openai_response = openai.Completion.create(
+            engine="text-davinci-003",
+            prompt=prompt,
+            max_tokens=500,
+            temperature=0.7
+        )
+        
+        # Extract the generated answer
+        answer = openai_response.choices[0].text.strip()
+        return {"openai_response": answer}
+    except openai.error.OpenAIError as e:
+        logger.error(f"OpenAI API error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate a response from OpenAI")
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
+
 
 def load_sql_db_config():
     try:
@@ -239,3 +329,46 @@ async def debug_token(authorization: str = Header(None)):
         return {"message": "Token has expired"}
     except jwt.InvalidTokenError:
         return {"message": "Invalid token"}
+
+
+class ProcessedFileContent(BaseModel):
+    processed_content: str
+
+@app.get("/processed_file", response_model=ProcessedFileContent)
+async def get_processed_file_content(
+    file_name: str = Query(..., description="Name of the file"),
+    table: str = Query(..., description="Table name (files_pypdf or files_azure)"),
+    current_user: str = Depends(get_current_user)
+):
+    connection = load_sql_db_config()
+    if not connection:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+    
+    try:
+        with connection.cursor() as cursor:
+            # Validate table name to prevent SQL injection
+            if table not in ['files_pypdf', 'files_azure']:
+                raise HTTPException(status_code=400, detail="Invalid table name")
+            
+            sql = f"SELECT processed_file_name FROM {table} WHERE file_name = %s"
+            cursor.execute(sql, (file_name,))
+            result = cursor.fetchone()
+            
+            if not result:
+                raise HTTPException(status_code=404, detail="Processed file not found")
+            
+            processed_file_name = result['processed_file_name']
+            
+            # Here, you would typically read the content of the processed file
+            # For this example, we'll just return the file name
+            # In a real scenario, you might read from a file storage system
+            processed_content = f"Content of {processed_file_name}"
+            
+            return {"processed_content": processed_content}
+    
+    except pymysql.Error as e:
+        logger.error(f"Database error while fetching processed file content: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    
+    finally:
+        connection.close()

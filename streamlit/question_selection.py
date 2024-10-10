@@ -54,16 +54,24 @@ def question_selection_page():
             if selected_task:
                 st.text_input("Associated File:", value=selected_task['file_name'], disabled=True, key="associated_file")
 
-        st.write("### Which API should we use to extract pdf data into text?")
-        selected_api = st.radio("Select API", ["PyPDF", "Azure"], horizontal=True, key="api_radio")
+        # Show API selection only if the selected file type is "PDF"
+        if file_type == "PDF":
+            st.write("### Which API should we use to extract pdf data into text?")
+            selected_api = st.radio("Select API", ["PyPDF", "Azure"], horizontal=True, key="api_radio")
 
-        if selected_task:
-            st.session_state.selected_question = selected_task['question']
-            st.session_state.selected_task_id = selected_task['task_id']
-            st.session_state.selected_file_name = selected_task['file_name']
-            st.session_state.selected_api = selected_api
-        else:
-            st.warning("Please select a question before proceeding.")
+            if selected_task:
+                st.session_state.selected_question = selected_task['question']
+                st.session_state.selected_task_id = selected_task['task_id']
+                st.session_state.selected_file_name = selected_task['file_name']
+                st.session_state.selected_api = selected_api
+        elif file_type == "Other":
+            # Store the question without API selection if the file type is "Other"
+            if selected_task:
+                st.session_state.selected_question = selected_task['question']
+                st.session_state.selected_task_id = selected_task['task_id']
+                st.session_state.selected_file_name = selected_task['file_name']
+            else:
+                st.warning("Please select a question before proceeding.")
     else:
         st.error("No data available. Please check your API connection.")
 
@@ -80,5 +88,6 @@ def question_selection_page():
 
 def main():
     question_selection_page()
+
 if __name__ == "__main__":
     main()
