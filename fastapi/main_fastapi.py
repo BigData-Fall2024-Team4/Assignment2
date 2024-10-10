@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query, Depends, Header
+from fastapi import FastAPI,APIRouter, HTTPException, Query, Depends, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr, constr, validator
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI()
+router = APIRouter()
 
 # JWT settings
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -28,8 +29,8 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # GCP bucket settings
-PYPDF_BUCKET_NAME = os.getenv("PYPDF_BUCKET_NAME")
-PDF_BUCKET_NAME = os.getenv("PDF_BUCKET_NAME")
+TXT_BUCKET_NAME= os.getenv("TXT_BUCKET_NAME")
+
 
 # Google Cloud Storage client setup
 credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -44,16 +45,29 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 # Model for submitting answers
 class SubmitAnswerRequest(BaseModel):
     question: str
-    file_name: str
     processed_content: str
     api: str  # Indicates which API (PyPDF or Azure) is used
+    file_name: str
 
 def get_file_from_gcp(bucket_name: str, file_name: str) -> str:
     try:
-        bucket = storage_client.bucket(bucket_name)
-        blob = bucket.blob(file_name)
-        content = blob.download_as_text()
-        return content
+        # List of folders to search in
+        folders = ['test', 'validation']
+        
+        # Iterate through each folder to find the file
+        for folder in folders:
+            blob_path = f"{folder}/{file_name}"
+            bucket = storage_client.bucket(bucket_name)
+            blob = bucket.blob(blob_path)
+            
+            if blob.exists():
+                # Download the content as text if the file is found
+                content = blob.download_as_text()
+                return content
+
+        # If the file is not found in any of the folders, raise an error
+        raise HTTPException(status_code=404, detail=f"File '{file_name}' not found in 'test' or 'validation' folders.")
+    
     except Exception as e:
         logger.error(f"Failed to fetch file from GCP bucket: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error retrieving file from GCP Storage: {str(e)}")
@@ -74,45 +88,52 @@ async def get_current_user(token: str):
 @app.post("/submit_answer")
 async def submit_answer(
     request: SubmitAnswerRequest,
-    token: str = Depends(get_current_user)
+    # token: str = Depends(get_current_user)
 ):
     try:
-        # Determine the correct bucket based on the file type and API
+        # Determine the processed file name based on the API
         if request.api.lower() == "pypdf":
-            if request.file_name.lower().endswith(".pdf"):
-                bucket_name = PDF_BUCKET_NAME
-            else:
-                bucket_name = PYPDF_BUCKET_NAME
+            processed_file_name = f"{request.file_name}.txt"
+        elif request.api.lower() == "azure":
+            processed_file_name = f"{request.file_name}_azure.txt"
         else:
             raise HTTPException(status_code=400, detail="Unsupported API type")
 
-        # Fetch the processed content if not provided
-        if not request.processed_content:
-            processed_content = get_file_from_gcp(bucket_name, request.file_name)
-        else:
-            processed_content = request.processed_content
+        # Get the processed file from ass2-airflow bucket
+        processed_file_content = get_file_from_gcp(TXT_BUCKET_NAME, processed_file_name)
 
         # Prepare the prompt for OpenAI
-        prompt = f"Question: {request.question}\nProcessed Content: {processed_content}\nAnswer:"
+        prompt = f"""
+        Answer the following question based on the information provided in the processed .txt file content:
+        Question: {request.question}
+        .txt File Content: {processed_file_content}
+        Answer:
+        """
         
-        # Call OpenAI's API to generate a response
-        openai_response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=prompt,
-            max_tokens=500,
-            temperature=0.7
+        try:
+            openai_response = openai.Completion.create(
+                engine="text-davinci-003",
+                prompt=prompt,
+                max_tokens=500,
+                temperature=0.7
         )
+        except Exception as e:
+            logger.error(f"OpenAI API error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
+
         
         # Extract the generated answer
         answer = openai_response.choices[0].text.strip()
         return {"openai_response": answer}
-    except openai.error.OpenAIError as e:
-        logger.error(f"OpenAI API error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to generate a response from OpenAI")
+    # except Exception as e:
+    #     logger.error(f"OpenAI error occurred: {str(e)}")
+    #     raise HTTPException(status_code=500, detail="Error with OpenAI API")
+    # except Exception as e:
+    #     logger.error(f"Unexpected error: {str(e)}")
+    #     raise HTTPException(status_code=500, detail="An unexpected error occurred")
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        raise HTTPException(status_code=500, detail="An unexpected error occurred")
-
+        logger.error(f"Error in submit_answer: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 def load_sql_db_config():
     try:
@@ -338,7 +359,7 @@ class ProcessedFileContent(BaseModel):
 async def get_processed_file_content(
     file_name: str = Query(..., description="Name of the file"),
     table: str = Query(..., description="Table name (files_pypdf or files_azure)"),
-    current_user: str = Depends(get_current_user)
+   # current_user: str = Depends(get_current_user)
 ):
     connection = load_sql_db_config()
     if not connection:
@@ -362,7 +383,7 @@ async def get_processed_file_content(
             # Here, you would typically read the content of the processed file
             # For this example, we'll just return the file name
             # In a real scenario, you might read from a file storage system
-            processed_content = f"Content of {processed_file_name}"
+            processed_content = f"{processed_file_name}"
             
             return {"processed_content": processed_content}
     
