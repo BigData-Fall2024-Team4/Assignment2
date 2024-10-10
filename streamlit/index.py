@@ -1,11 +1,16 @@
 import streamlit as st
-import requests
+import requests, pathlib, os
 from question_selection import question_selection_page
 from submit_page import submit_page
 from summary_page import summary_page
-import os
+from dotenv import load_dotenv
 
-FASTAPI_URL = os.getenv("FASTAPI_URL", "http://fastapi-app:8000")
+
+env_path = pathlib.Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
+
+FASTAPI_URL = os.getenv('FASTAPI_URL')
+
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'token' not in st.session_state:

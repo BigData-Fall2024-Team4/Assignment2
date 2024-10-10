@@ -75,6 +75,8 @@ def create_jwt_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+
+
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=401,
@@ -138,7 +140,6 @@ def register_user(user: UserRegister):
     finally:
         connection.close()
 
-
 @app.post("/token")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     connection = load_sql_db_config()
@@ -171,7 +172,16 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
             access_token = create_jwt_token(
                 data={"sub": user['email']}, expires_delta=access_token_expires
             )
-            logger.info(f"Login successful: {form_data.username}")
+            
+            # Verify the token
+            try:
+                payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+                if payload["sub"] != user['email']:
+                    raise HTTPException(status_code=401, detail="Token verification failed")
+            except jwt.PyJWTError:
+                raise HTTPException(status_code=401, detail="Token verification failed")
+            
+            logger.info(f"Login successful and token verified: {form_data.username}")
             return {"access_token": access_token, "token_type": "bearer"}
     except pymysql.Error as e:
         logger.error(f"Database error during login: {str(e)}")
@@ -181,6 +191,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
     finally:
         connection.close()
+
 class QuestionData(BaseModel):
     task_id: str
     question: str
@@ -239,3 +250,29 @@ async def debug_token(authorization: str = Header(None)):
         return {"message": "Token has expired"}
     except jwt.InvalidTokenError:
         return {"message": "Invalid token"}
+
+
+async def verify_token(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        exp = payload.get("exp")
+        if exp is None or datetime.utcfromtimestamp(exp) < datetime.utcnow():
+            raise HTTPException(status_code=401, detail="Token has expired")
+        return {"authenticated": True, "email": email}
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.get("/check-auth")
+async def check_auth(auth_result: dict = Depends(verify_token)):
+    return auth_result
+
+@app.get("/public")
+async def public_route():
+    return {"message": "This is a public route"}
+
+@app.get("/protected")
+async def protected_route(auth_result: dict = Depends(verify_token)):
+    return {"message": "This is a protected route", "user": auth_result["email"]}
