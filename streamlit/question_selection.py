@@ -77,11 +77,11 @@ def question_selection_page():
 
     # Add buttons for Submit and Summary pages
     col1, col2 = st.columns(2)
-    
+
     with col1:
         if st.button("Submit"):
             submit_page()
-    
+
     with col2:
         if st.button("Summary"):
             summary_page()
@@ -89,5 +89,6 @@ def question_selection_page():
 def main():
     question_selection_page()
 
-if __name__ == "__main__":
+if __name__ == "main":
     main()
+

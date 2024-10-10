@@ -10,7 +10,7 @@ API_URL = os.getenv("API_URL", "http://fastapi-app:8000")
 def get_processed_file_content(file_name, api):
     """Fetches the processed file content from the appropriate GCP SQL table."""
     try:
-        table = "files_pypdf" if api == "PyPDF" else "files_azure"
+        table = "files_pypdf" if api == "pypdf" else "files_azure"
         # headers = {"Authorization": f"Bearer {st.session_state.get('token', '')}"}
         response = requests.get(
             f"{API_URL}/processed_file",
@@ -38,7 +38,7 @@ def submit_answer(question, processed_content, api,file_name):
             # headers=headers
         )
         response.raise_for_status()
-        return response.json().get("openai_response", "No response available")
+        return response.json().get("response", "No response available")
     except requests.exceptions.RequestException as e:
         st.error(f"Failed to submit answer: {str(e)}")
         return f"Error submitting answer: {str(e)}"
@@ -69,16 +69,21 @@ def submit_page():
             processed_content = get_processed_file_content(selected_file_name, selected_api)
         st.text_area("Processed File Content:", value=processed_content, height=200, disabled=True)
     
-    # Add submit button
     if st.button("Submit Answer"):
         with st.spinner("Submitting answer and generating response..."):
             openai_response = submit_answer(selected_question, processed_content, selected_api, selected_file_name)
-        st.text_area("OpenAI Response:", value=openai_response, height=300)
+        if openai_response != "No response available":
+            st.subheader("OpenAI Response:")
+            st.write(openai_response)
+        else:
+            st.error("Failed to get a response from OpenAI. Please try again.")
     
-    # Add a button to go back to the question selection page
     if st.button("Back to Question Selection"):
-        st.session_state['page'] = "home"
+        st.session_state.page = "question_selection"
         st.experimental_rerun()
-
-if __name__ == "__main__":
+        
+def main():
     submit_page()
+
+if __name__ == "main":
+    main()
