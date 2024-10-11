@@ -22,7 +22,7 @@ default_args = {
 
 # Define the DAG
 dag = DAG(
-    dag_id='gaia_pdf_processing_dag',
+    dag_id='pypdf_processing_dag',
     default_args=default_args,
     schedule_interval='@daily',
     catchup=False
