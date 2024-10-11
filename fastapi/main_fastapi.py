@@ -118,12 +118,6 @@ async def submit_answer(
         """
         
         try:
-            # openai_response = openai.Completion.create(
-            #     engine="text-davinci-003",
-            #     prompt=prompt,
-            #     max_tokens=500,
-            #     temperature=0.7
-            # Create the OpenAI API call with the messages
             response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -313,6 +307,7 @@ class QuestionData(BaseModel):
     task_id: str
     question: str
     file_name: str
+    file_name : str
 
 @app.get("/questions", response_model=List[QuestionData])
 async def get_questions(
@@ -333,11 +328,11 @@ async def get_questions(
                 all_data = []
                 for table in tables:
                     if file_type == 'pdf':
-                        cursor.execute(f"SELECT task_id, question, file_name FROM {table} WHERE file_name LIKE '%.pdf'")
+                        cursor.execute(f"SELECT task_id, question, file_name, final_answer FROM {table} WHERE file_name LIKE '%.pdf'")
                     elif file_type == 'other':
-                        cursor.execute(f"SELECT task_id, question, file_name FROM {table} WHERE file_name NOT LIKE '%.pdf'")
+                        cursor.execute(f"SELECT task_id, question, file_nam, final_answer FROM {table} WHERE file_name NOT LIKE '%.pdf'")
                     else:
-                        cursor.execute(f"SELECT task_id, question, file_name FROM {table}")
+                        cursor.execute(f"SELECT task_id, question, file_name, final_answer FROM {table}")
                     all_data.extend(cursor.fetchall())
             connection.close()
             return all_data
@@ -410,3 +405,39 @@ async def get_processed_file_content(
     
     finally:
         connection.close()
+
+class SummaryRequest(BaseModel):
+    file_name: str
+
+@app.post("/generate_summary")
+async def generate_summary(request: SummaryRequest):
+    file_name = Path(request.file_name).stem + ".txt"
+    try:
+        file_content = get_file_from_gcp(TXT_BUCKET_NAME, file_name)
+
+        prompt = f"""
+        Generate a concise summary of the following text content:
+        {file_content}
+        Summary (about 200 words)::
+        """
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a highly efficient AI assistant specialized in summarizing text."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=300,
+                n=1,
+                temperature=0.7
+            )
+        except Exception as e:
+            logger.error(f"OpenAI API error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
+
+        summary = response.choices[0].message.content.strip()
+        return {"summary": summary}
+    except Exception as e:
+        logger.error(f"Error in generate_summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")

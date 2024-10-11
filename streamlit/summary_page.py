@@ -1,35 +1,56 @@
-# pages/2_Summary.py
 import streamlit as st
+import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+API_URL = os.getenv("API_URL", "http://fastapi-app:8000")
+
+def generate_summary(file_name):
+    """Sends the file name to the FastAPI backend to generate a summary."""
+    try:
+        response = requests.post(
+            f"{API_URL}/generate_summary",
+            json={"file_name": file_name}
+        )
+        response.raise_for_status()
+        return response.json().get("summary", "No summary available")
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to generate summary: {str(e)}")
+        return f"Error generating summary: {str(e)}"
 
 def summary_page():
     st.title("Summary Page")
     
     # Display all selected information
     st.subheader("Selected Information")
-    st.write(f"**Selected Question:** {st.session_state.get('selected_question', 'No question selected')}")
-    st.write(f"**Task ID:** {st.session_state.get('selected_task_id', 'No task selected')}")
-    st.write(f"**File Name:** {st.session_state.get('selected_file_name', 'No file selected')}")
-    st.write(f"**Selected API:** {st.session_state.get('selected_api', 'No API selected')}")
+    selected_question = st.session_state.get('selected_question', 'No question selected')
+    selected_task_id = st.session_state.get('selected_task_id', 'No task selected')
+    selected_file_name = st.session_state.get('selected_file_name', 'No file selected')
+    selected_api = st.session_state.get('selected_api', 'No API selected')
+
+    st.write(f"**Selected Question:** {selected_question}")
+    st.write(f"**Task ID:** {selected_task_id}")
+    st.write(f"**File Name:** {selected_file_name}")
+    st.write(f"**Selected API:** {selected_api}")
+
+    if st.button("Generate Summary"):
+        if selected_file_name:
+            with st.spinner("Generating summary..."):
+                summary = generate_summary(selected_file_name)
+            if summary != "No summary available":
+                st.subheader("Generated Summary:")
+                st.write(summary)
+            else:
+                st.error("Failed to generate a summary. Please try again.")
+        else:
+            st.warning("No file name selected. Please select a file from the previous page.")
+
     
-    # Add a separator
-    st.markdown("---")
-    
-    # Add your summary page specific code here
-    st.subheader("Summary Information")
-    
-    # This is a placeholder. In a real application, you might fetch this data from your backend
-    st.write("Total questions answered: 42")
-    st.write("Average score: 85%")
-    
-    # You could add a chart here
-    import pandas as pd
-    import plotly.express as px
-    
-    # Sample data
-    data = pd.DataFrame({
-        'Category': ['Correct', 'Incorrect', 'Partially Correct'],
-        'Count': [30, 5, 7]
-    })
-    
-    fig = px.pie(data, values='Count', names='Category', title='Answer Distribution')
-    st.plotly_chart(fig)
+
+def main():
+    summary_page()
+
+if __name__ == "__main__":
+    main()
