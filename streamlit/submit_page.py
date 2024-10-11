@@ -136,7 +136,7 @@ def submit_page():
     else:
         with st.spinner("Fetching processed file content..."):
             processed_content = get_processed_file_content(selected_file_name, selected_api)
-        st.text_area("Processed Content", value=processed_content, height=300, disabled=True)
+        st.text_area("Processed Content", value=processed_content, height=50, disabled=True)
         st.session_state.processed_content = processed_content
 
     if st.button("Submit Answer"):
