@@ -136,12 +136,6 @@ async def submit_answer(
         # Extract the generated answer
         answer = response.choices[0].message.content.strip()
         return {"response": answer}
-    # except Exception as e:
-    #     logger.error(f"OpenAI error occurred: {str(e)}")
-    #     raise HTTPException(status_code=500, detail="Error with OpenAI API")
-    # except Exception as e:
-    #     logger.error(f"Unexpected error: {str(e)}")
-    #     raise HTTPException(status_code=500, detail="An unexpected error occurred")
     except Exception as e:
         logger.error(f"Error in submit_answer: {str(e)}")
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
@@ -307,7 +301,7 @@ class QuestionData(BaseModel):
     task_id: str
     question: str
     file_name: str
-    file_name : str
+    final_answer: str
 
 @app.get("/questions", response_model=List[QuestionData])
 async def get_questions(
@@ -330,7 +324,7 @@ async def get_questions(
                     if file_type == 'pdf':
                         cursor.execute(f"SELECT task_id, question, file_name, final_answer FROM {table} WHERE file_name LIKE '%.pdf'")
                     elif file_type == 'other':
-                        cursor.execute(f"SELECT task_id, question, file_nam, final_answer FROM {table} WHERE file_name NOT LIKE '%.pdf'")
+                        cursor.execute(f"SELECT task_id, question, file_name, final_answer FROM {table} WHERE file_name NOT LIKE '%.pdf'")
                     else:
                         cursor.execute(f"SELECT task_id, question, file_name, final_answer FROM {table}")
                     all_data.extend(cursor.fetchall())
@@ -391,10 +385,6 @@ async def get_processed_file_content(
                 raise HTTPException(status_code=404, detail="Processed file not found")
             
             processed_file_name = result['processed_file_name']
-            
-            # Here, you would typically read the content of the processed file
-            # For this example, we'll just return the file name
-            # In a real scenario, you might read from a file storage system
             processed_content = f"{processed_file_name}"
             
             return {"processed_content": processed_content}

@@ -52,6 +52,7 @@ def submit_page():
     selected_task_id = st.session_state.get('selected_task_id', 'No task selected')
     selected_file_name = st.session_state.get('selected_file_name', 'No file selected')
     selected_api = st.session_state.get('selected_api', 'No API selected')
+    selected_final_answer
     
     st.write(f"**Selected Question:** {selected_question}")
     st.write(f"**Task ID:** {selected_task_id}")
