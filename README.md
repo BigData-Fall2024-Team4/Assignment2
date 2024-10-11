@@ -19,7 +19,7 @@ Google collab notebook: https://colab.research.google.com/drive/1H78r4BZynBK4jxV
 
 Google codelab: [https://codelabs-preview.appspot.com/?file_id=1r22xjHpWOK1GBYjrgJxDEu2EVpfbIeNmms62R1VADps#0]
 
-App link (hosted on Streamlit Cloud): https://mainpy-heznqzbq2wxhheb66pts6x.streamlit.app/
+App link (hosted on Streamlit Cloud): https://assignment2-team4.streamlit.app/
 
 Demo Video URL: https://drive.google.com/file/d/15uZEUIzM380tWLgTcy5BQN5SA_6WAFyi/view?usp=drive_link
 
