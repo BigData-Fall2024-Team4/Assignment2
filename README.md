@@ -15,11 +15,17 @@ Key technologies involved include:
 
 ## Project Resources
 
+
+
 Google collab notebook: https://colab.research.google.com/drive/1H78r4BZynBK4jxVNtZfMn8BgzBlUjeuh?usp=sharing
 
 Google codelab: [https://codelabs-preview.appspot.com/?file_id=1r22xjHpWOK1GBYjrgJxDEu2EVpfbIeNmms62R1VADps#0]
 
 Demo Video URL: https://drive.google.com/file/d/15uZEUIzM380tWLgTcy5BQN5SA_6WAFyi/view?usp=drive_link
+
+Airflow: http://35.243.155.116:8080
+Fastapi: http://34.138.117.80:8000
+Streamlit: http://34.138.117.80:8501
 
 ### Tech Stack
 Python | Streamlit | FastAPI | PyPDF2 | Azure Document Intelligence | Airflow | Docker | Google Cloud Platform (GCP) | GCP SQL | Google Cloud Storage (GCS) | OpenAI | MySQL
