@@ -78,9 +78,7 @@ def submit_page():
         else:
             st.error("Failed to get a response from OpenAI. Please try again.")
     
-    if st.button("Back to Question Selection"):
-        st.session_state.page = "question_selection"
-        st.experimental_rerun()
+   
         
 def main():
     submit_page()
