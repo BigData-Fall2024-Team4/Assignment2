@@ -1,8 +1,7 @@
 import streamlit as st
 import requests
-import os, pathlib
+import os,pathlib
 from dotenv import load_dotenv
-
 load_dotenv()
 
 env_path = pathlib.Path('.') / '.env'
