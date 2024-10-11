@@ -12,13 +12,16 @@ import logging
 from google.cloud import storage
 from google.oauth2 import service_account
 import openai
-import os
+import os, pathlib
 from pathlib import Path
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 load_dotenv()
+
+env_path = pathlib.Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
 
 app = FastAPI()
 router = APIRouter()
