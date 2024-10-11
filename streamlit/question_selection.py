@@ -55,7 +55,7 @@ def question_selection_page():
                 st.text_input("Associated File:", value=selected_task['file_name'], disabled=True, key="associated_file")
 
                 # Display the final answer, now accessed consistently
-                st.text_area("Final Answer:", value=selected_task['final_answer'], disabled=True, key="final_answer", height=150)
+                st.text_area("Expected Answer:", value=selected_task['final_answer'], disabled=True, key="final_answer")
 
         # Show API selection only if the selected file type is "PDF"
         if file_type == "PDF":

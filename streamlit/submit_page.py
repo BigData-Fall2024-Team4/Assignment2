@@ -52,14 +52,16 @@ def submit_page():
     selected_task_id = st.session_state.get('selected_task_id', 'No task selected')
     selected_file_name = st.session_state.get('selected_file_name', 'No file selected')
     selected_api = st.session_state.get('selected_api', 'No API selected')
+    selected_final_answer = st.session_state.get('selected_final_answer', 'No file selected')
     
     
     st.write(f"**Selected Question:** {selected_question}")
     st.write(f"**Task ID:** {selected_task_id}")
     st.write(f"**File Name:** {selected_file_name}")
     st.write(f"**Selected API:** {selected_api}")
+    st.write(f"**Expected Answers:** {selected_final_answer}")
     
-    st.write("Processed File Content")
+    st.write("**Processed File Content**")
     
     # Check if the file is a PDF
     if not selected_file_name or not selected_file_name.lower().endswith('.pdf'):
@@ -68,7 +70,7 @@ def submit_page():
     else:
         with st.spinner("Fetching processed file content..."):
             processed_content = get_processed_file_content(selected_file_name, selected_api)
-        st.text_area("Processed File Content:", value=processed_content, height=200, disabled=True)
+        st.text_input("", value=processed_content, disabled=True)
     
     if st.button("Submit Answer"):
         with st.spinner("Submitting answer and generating response..."):
@@ -76,13 +78,27 @@ def submit_page():
         if openai_response != "No response available":
             st.subheader("OpenAI Response:")
             st.write(openai_response)
+        # else:
+        #     st.error("Failed to get a response from OpenAI. Please try again.")
+    
+    # Check if the final answer is in the OpenAI response
+            if selected_final_answer.lower() in openai_response.lower():
+                st.success("The answer may be correct.")
+            else:
+                st.warning("The answer may not be correct.")
+            
+            # Add buttons for marking correct or wrong
+            # col1, col2 = st.columns(2)
+            # with col1:
+            #     if st.button("Mark Correct"):
+            #         result = submit_user_attempt(selected_question, user_attempt_answer_1, True)
+            #         st.success(f"Answer marked as correct and submitted! {result}")
+            # with col2:
+            #     result = submit_user_attempt(selected_question, user_attempt_answer_1, False)
+            #     st.error(f"Answer marked as wrong and submitted! {result}")
         else:
             st.error("Failed to get a response from OpenAI. Please try again.")
-    
-   
-        
-def main():
-    submit_page()
+
 
 if __name__ == "main":
     main()
