@@ -12,8 +12,8 @@ import logging
 from google.cloud import storage
 from google.oauth2 import service_account
 import openai
-import os, pathlib
 from openai import OpenAI
+import os
 from pathlib import Path
 
 # Set up logging
