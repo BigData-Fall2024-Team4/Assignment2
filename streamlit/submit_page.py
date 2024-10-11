@@ -64,22 +64,27 @@ def call_me():
     edit_steps = get_edit_steps(selected_file_name)
     
     if edit_steps != "Error fetching edit steps":
-        st.text_area("Edit Steps Content", value=edit_steps, height=500, disabled=True)
+        # st.text_input("Edit Steps Content", value=edit_steps, disabled=True)
+        st.text_area("Edit Steps Content", value=edit_steps, height=500)
         st.session_state.edit_steps_content = edit_steps
         st.session_state.show_chat_button = True
-    else:
-        st.warning("No edit steps found for this file.")
-        st.session_state.edit_steps_content = None
-        st.session_state.show_chat_button = False
 
-    # Show the button to get OpenAI response using edit steps if edit steps are available
     if st.session_state.show_chat_button:
-        if st.button("Get OpenAI Response with Edit Steps"):
-            st.session_state.show_openai_response = True  # Set a flag to show the response
+        # if st.button("OpenAI Response"):
+            call_cha()
+    # else:
+    #     st.warning("No edit steps found for this file.")
+    #     st.session_state.edit_steps_content = None
+    #     st.session_state.show_chat_button = False
 
-    # If the flag is set, call the function to display the OpenAI response
-    if st.session_state.get('show_openai_response', False):
-        call_cha()
+    # # Show the button to get OpenAI response using edit steps if edit steps are available
+    # if st.session_state.show_chat_button:
+    #     if st.button("Get OpenAI Response with Edit Steps", key="get_openai_response"):
+    #         st.session_state.show_openai_response = True  # Set a flag to show the response
+
+    # # If the flag is set, call the function to display the OpenAI response
+    # if st.session_state.get('show_openai_response', False):
+    #     call_cha()
 
 def call_cha():
     # Get the stored processed content from the session state
@@ -99,6 +104,8 @@ def submit_page():
     # Initialize session state variables if they don't exist
     if 'show_edit_steps' not in st.session_state:
         st.session_state.show_edit_steps = False
+    if 'dem' not in st.session_state:
+        st.session_state.dem = False    
     if 'edit_steps_content' not in st.session_state:
         st.session_state.edit_steps_content = None
     if 'show_chat_button' not in st.session_state:
@@ -129,7 +136,7 @@ def submit_page():
     else:
         with st.spinner("Fetching processed file content..."):
             processed_content = get_processed_file_content(selected_file_name, selected_api)
-        st.text_area("", value=processed_content, disabled=True)
+        st.text_area("Processed Content", value=processed_content, height=300, disabled=True)
         st.session_state.processed_content = processed_content
 
     if st.button("Submit Answer"):
@@ -141,6 +148,7 @@ def submit_page():
 
             if selected_final_answer.lower() in openai_response.lower():
                 st.success("The answer may be correct.")
+                st.session_state.dem = True
             else:
                 st.warning("The answer may not be correct.")
                 # Enable the "Mark Wrong" button
@@ -151,5 +159,9 @@ def submit_page():
         if st.button("Mark Wrong"):
             call_me()
 
+    
+    if st.button("Mark Correct"):
+        st.write("Marked as correct")
+     
 if __name__ == "__main__":
     submit_page()
