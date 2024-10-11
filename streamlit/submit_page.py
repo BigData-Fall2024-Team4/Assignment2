@@ -59,8 +59,6 @@ def submit_answer(question, processed_content, api, file_name, edit_steps=None):
         return f"Error submitting answer: {str(e)}"
 
 def call_me():
-    if 'show_chat_button' not in st.session_state:
-        st.session_state.show_chat_button = False
     st.subheader("Edit Steps:")
     selected_file_name = st.session_state.get('selected_file_name', 'No file selected')
     edit_steps = get_edit_steps(selected_file_name)
@@ -69,17 +67,21 @@ def call_me():
         st.text_area("Edit Steps Content", value=edit_steps, height=500, disabled=True)
         st.session_state.edit_steps_content = edit_steps
         st.session_state.show_chat_button = True
+    else:
+        st.warning("No edit steps found for this file.")
+        st.session_state.edit_steps_content = None
+        st.session_state.show_chat_button = False
+
+    # Show the button to get OpenAI response using edit steps if edit steps are available
     if st.session_state.show_chat_button:
         if st.button("Get OpenAI Response with Edit Steps"):
-            call_cha()
-    # else:
-    #     st.warning("No edit steps found for this file.")
-    #     st.session_state.edit_steps_content = None
-        # st.session_state.show_chat_button = False
+            st.session_state.show_openai_response = True  # Set a flag to show the response
 
+    # If the flag is set, call the function to display the OpenAI response
+    if st.session_state.get('show_openai_response', False):
+        call_cha()
 
 def call_cha():
-    
     # Get the stored processed content from the session state
     processed_content = st.session_state.get('processed_content', '')
     question = st.session_state.get('selected_question', 'No question selected')
@@ -90,7 +92,6 @@ def call_cha():
     )
     st.subheader("OpenAI Response with Edit Steps:")
     st.write(openai_response)
-    # st.session_state.show_chat_button = False  # Hide the chat button after getting a response
 
 def submit_page():
     st.title("Submit Page")
@@ -100,6 +101,10 @@ def submit_page():
         st.session_state.show_edit_steps = False
     if 'edit_steps_content' not in st.session_state:
         st.session_state.edit_steps_content = None
+    if 'show_chat_button' not in st.session_state:
+        st.session_state.show_chat_button = False
+    if 'show_openai_response' not in st.session_state:
+        st.session_state.show_openai_response = False
 
     # Display all selected information
     st.subheader("Selected Information")
