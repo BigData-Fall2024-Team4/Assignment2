@@ -263,3 +263,6 @@ with dag:
         python_callable=upload_all_files,
         provide_context=True
     )
+
+    # Task flow
+    clone_repo >> filter_pdfs >> process_pdfs >> upload_files
