@@ -54,6 +54,7 @@ class SubmitAnswerRequest(BaseModel):
     processed_content: str
     api: str  # Indicates which API (PyPDF or Azure) is used
     file_name: str
+    edit_steps: Optional[str] = None  # Optional edit steps
 
 def get_file_from_gcp(bucket_name: str, file_name: str) -> str:
     try:
@@ -119,7 +120,12 @@ async def submit_answer(
         .txt File Content: {processed_file_content}
         Answer:
         """
-        
+        # If edit steps are provided, include them in the prompt
+        if request.edit_steps:
+            prompt += f"\nEdit Steps: {request.edit_steps}\nAnswer:"
+        else:
+            prompt += "\nAnswer:"
+            
         try:
             response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -434,3 +440,54 @@ async def generate_summary(request: SummaryRequest):
     except Exception as e:
         logger.error(f"Error in generate_summary: {str(e)}")
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+class SubmitAnswerRequest(BaseModel):
+    question: str
+    processed_content: str
+    api: str
+    file_name: str
+
+class CorrectAnswerResponse(BaseModel):
+    answer: str
+
+class EditStepsResponse(BaseModel):
+    edit_steps: str
+
+
+
+@app.get("/edit_steps", response_model=EditStepsResponse)
+async def get_edit_steps(
+    file_name: str = Query(..., description="Name of the file"),
+    current_user: str = Depends(get_current_user)
+):
+    connection = load_sql_db_config()
+    if not connection:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+
+    try:
+        with connection.cursor() as cursor:
+            # Define the tables to search
+            tables = ["test_cases", "validation_cases"]
+
+            # Iterate over each table to find the file_name
+            for table in tables:
+                sql = f"SELECT steps FROM {table} WHERE file_name = %s"
+                cursor.execute(sql, (file_name,))
+                result = cursor.fetchone()
+
+                # If steps are found, return them
+                if result:
+                    edit_steps = result['steps']
+                    return {"edit_steps": edit_steps}
+
+            # If no results are found in any of the tables, raise a 404 error
+            raise HTTPException(status_code=404, detail="Edit steps not found for the provided file name in both tables")
+
+    except pymysql.Error as e:
+        logger.error(f"Database error while fetching edit steps: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error in get_edit_steps: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+    finally:
+        connection.close()
