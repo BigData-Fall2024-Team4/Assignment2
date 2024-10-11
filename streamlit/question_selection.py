@@ -1,13 +1,17 @@
 import streamlit as st
 import requests
-import os
+import os, pathlib
 from submit_page import submit_page
 from summary_page import summary_page
 from dotenv import load_dotenv
 
 load_dotenv()
 
-API_URL = os.getenv("API_URL", "http://fastapi-app:8000")
+env_path = pathlib.Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
+
+API_URL = os.getenv("FASTAPI_URL")
+#API_URL = os.getenv("API_URL", "http://fastapi-app:8000")
 
 def get_data_from_gcp(file_type, dataset):
     """Fetches question data from the FastAPI backend."""

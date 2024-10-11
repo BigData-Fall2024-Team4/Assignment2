@@ -21,6 +21,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 load_dotenv()
 
+env_path = pathlib.Path('.') / '.env'
+load_dotenv(dotenv_path=env_path)
+
 app = FastAPI()
 router = APIRouter()
 

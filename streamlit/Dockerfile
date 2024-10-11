@@ -14,6 +14,8 @@ RUN pip install poetry \
 
 # Copy the application code
 COPY . /app
+COPY . .
+COPY ./.env ./.env
 
 # Expose the default Streamlit port
 EXPOSE 8501
