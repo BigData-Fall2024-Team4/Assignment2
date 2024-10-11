@@ -13,6 +13,7 @@ from google.cloud import storage
 from google.oauth2 import service_account
 import openai
 import os, pathlib
+from openai import OpenAI
 from pathlib import Path
 
 # Set up logging
@@ -34,6 +35,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # GCP bucket settings
 TXT_BUCKET_NAME= os.getenv("TXT_BUCKET_NAME")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 # Google Cloud Storage client setup
@@ -119,11 +121,15 @@ async def submit_answer(
         """
         
         try:
-            openai_response = openai.Completion.create(
-                engine="text-davinci-003",
-                prompt=prompt,
-                max_tokens=500,
-                temperature=0.7
+            response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a highly efficient AI assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300,
+            n=1,
+            temperature=0.7
         )
         except Exception as e:
             logger.error(f"OpenAI API error: {str(e)}")
@@ -131,14 +137,8 @@ async def submit_answer(
 
         
         # Extract the generated answer
-        answer = openai_response.choices[0].text.strip()
-        return {"openai_response": answer}
-    # except Exception as e:
-    #     logger.error(f"OpenAI error occurred: {str(e)}")
-    #     raise HTTPException(status_code=500, detail="Error with OpenAI API")
-    # except Exception as e:
-    #     logger.error(f"Unexpected error: {str(e)}")
-    #     raise HTTPException(status_code=500, detail="An unexpected error occurred")
+        answer = response.choices[0].message.content.strip()
+        return {"response": answer}
     except Exception as e:
         logger.error(f"Error in submit_answer: {str(e)}")
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
@@ -304,6 +304,7 @@ class QuestionData(BaseModel):
     task_id: str
     question: str
     file_name: str
+    final_answer: str
 
 @app.get("/questions", response_model=List[QuestionData])
 async def get_questions(
@@ -324,11 +325,11 @@ async def get_questions(
                 all_data = []
                 for table in tables:
                     if file_type == 'pdf':
-                        cursor.execute(f"SELECT task_id, question, file_name FROM {table} WHERE file_name LIKE '%.pdf'")
+                        cursor.execute(f"SELECT task_id, question, file_name, final_answer FROM {table} WHERE file_name LIKE '%.pdf'")
                     elif file_type == 'other':
-                        cursor.execute(f"SELECT task_id, question, file_name FROM {table} WHERE file_name NOT LIKE '%.pdf'")
+                        cursor.execute(f"SELECT task_id, question, file_name, final_answer FROM {table} WHERE file_name NOT LIKE '%.pdf'")
                     else:
-                        cursor.execute(f"SELECT task_id, question, file_name FROM {table}")
+                        cursor.execute(f"SELECT task_id, question, file_name, final_answer FROM {table}")
                     all_data.extend(cursor.fetchall())
             connection.close()
             return all_data
@@ -387,10 +388,6 @@ async def get_processed_file_content(
                 raise HTTPException(status_code=404, detail="Processed file not found")
             
             processed_file_name = result['processed_file_name']
-            
-            # Here, you would typically read the content of the processed file
-            # For this example, we'll just return the file name
-            # In a real scenario, you might read from a file storage system
             processed_content = f"{processed_file_name}"
             
             return {"processed_content": processed_content}
@@ -401,3 +398,39 @@ async def get_processed_file_content(
     
     finally:
         connection.close()
+
+class SummaryRequest(BaseModel):
+    file_name: str
+
+@app.post("/generate_summary")
+async def generate_summary(request: SummaryRequest):
+    file_name = Path(request.file_name).stem + ".txt"
+    try:
+        file_content = get_file_from_gcp(TXT_BUCKET_NAME, file_name)
+
+        prompt = f"""
+        Generate a concise summary of the following text content:
+        {file_content}
+        Summary (about 200 words)::
+        """
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a highly efficient AI assistant specialized in summarizing text."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=300,
+                n=1,
+                temperature=0.7
+            )
+        except Exception as e:
+            logger.error(f"OpenAI API error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
+
+        summary = response.choices[0].message.content.strip()
+        return {"summary": summary}
+    except Exception as e:
+        logger.error(f"Error in generate_summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
