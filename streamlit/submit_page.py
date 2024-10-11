@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import os
 from dotenv import load_dotenv
+import plotly.graph_objects as go
 
 load_dotenv()
 
@@ -46,6 +47,13 @@ def submit_answer(question, processed_content, api,file_name):
 def submit_page():
     st.title("Submit Page")
     
+    # Initialize session state variables
+    if 'first_attempt' not in st.session_state:
+        st.session_state.first_attempt = 0
+    if 'second_attempt' not in st.session_state:
+        st.session_state.second_attempt = 0
+
+
     # Display all selected information
     st.subheader("Selected Information")
     selected_question = st.session_state.get('selected_question', 'No question selected')
@@ -88,17 +96,32 @@ def submit_page():
                 st.warning("The answer may not be correct.")
             
             # Add buttons for marking correct or wrong
-            # col1, col2 = st.columns(2)
-            # with col1:
-            #     if st.button("Mark Correct"):
-            #         result = submit_user_attempt(selected_question, user_attempt_answer_1, True)
-            #         st.success(f"Answer marked as correct and submitted! {result}")
-            # with col2:
-            #     result = submit_user_attempt(selected_question, user_attempt_answer_1, False)
-            #     st.error(f"Answer marked as wrong and submitted! {result}")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Mark Correct"):
+                    st.session_state.first_attempt += 1
+                    st.success(f"Answer marked as correct. First attempt count: {st.session_state.first_attempt}")
+            with col2:
+                if st.button("Mark Wrong"):
+                    st.session_state.second_attempt += 1
+                    st.error(f"Answer marked as wrong. Second attempt count: {st.session_state.second_attempt}")
         else:
             st.error("Failed to get a response from OpenAI. Please try again.")
+    
+    # Display pie chart
+    st.subheader("Attempt Summary")
+    total_attempts = 466  # Overall count
+    first_attempts = st.session_state.first_attempt
+    second_attempts = st.session_state.second_attempt
+    other_attempts = total_attempts - first_attempts - second_attempts
 
+    fig = go.Figure(data=[go.Pie(
+        labels=['Overall', 'First Attempt', 'Second Attempt'],
+        values=[other_attempts, first_attempts, second_attempts],
+        hole=.3
+    )])
+    fig.update_layout(title_text="Attempt Distribution")
+    st.plotly_chart(fig)
 
 if __name__ == "main":
     main()
