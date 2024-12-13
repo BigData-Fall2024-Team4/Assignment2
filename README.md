@@ -67,7 +67,7 @@ Python | Streamlit | FastAPI | PyPDF2 | Azure Document Intelligence | Airflow | 
 
 | Name                            | Percentage Contribution |
 | ------------------------------- | ----------------------- |
-| Sarthak Somvanshi               | 33% (User login, JWT, GCP Deployment, Swagger UI)                    |
+| Sarthak Somvanshi               | 33% (Basic chatbot development, Agentic architecture design, Document handler, Canvas Post Agent integration & testing, Final system testing)                    |
 | Yuga Kanse                      | 33% (OpenAI Integration, FastAPI Integration, Summary and Submit Page)                  |
 | Tanvi Inchanalkar               | 33% (Pypdf and Azure AI Document Intelligence Airflow Pipelines, Documentation)                   |
 
